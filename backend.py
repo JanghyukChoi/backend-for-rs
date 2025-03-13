@@ -124,6 +124,7 @@ def load_or_create_stock_data():
         return [doc.to_dict() for doc in stocks_ref]
 
     print("⚡ 새 데이터 생성 중..")
+    print("조금만 기다려보세요")
     stock_data = []
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -158,11 +159,10 @@ def load_or_create_stock_data():
                 "최저가 대비 상승률": f"+{increase_from_low:.2f}%",
                 "최고가 대비 하락률": f"-{decrease_from_high:.2f}%",
                 "섹터": sector,
-                "시가총액": f"{round(market_cap / 1e8)}억",
-                "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
+                "시가총액": f"{round(market_cap / 1e8)} 억",
+                "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')} 위"
             })
 
-    # ✅ Firestore에 데이터 저장
     save_to_firestore(stock_data)
 
     # ✅ Firestore에 마지막 업데이트 정보 저장
