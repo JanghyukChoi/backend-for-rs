@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi.middleware.cors import CORSMiddleware  # ✅ 올바르게 추가!
+from fastapi.middleware.cors import CORSMiddleware 
 
 
 app = FastAPI()
