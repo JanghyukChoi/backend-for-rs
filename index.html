@@ -208,8 +208,8 @@
             const tbody = document.querySelector("#stockTable tbody");
             let html = "";
             stocks.forEach(stock => {
-                let increaseRate = `<span style="color: red;">+${stock["lowest_increase_rate"]}</span>`;
-                let decreaseRate = `<span style="color: blue;">-${stock["highest_decrease_rate"]}</span>`;
+                let increaseRate = `<span style="color: red;">${stock["lowest_increase_rate"]}</span>`;
+                let decreaseRate = `<span style="color: blue;">${stock["highest_decrease_rate"]}</span>`;
 
                 html += `<tr>
                     <td><a href="https://finance.naver.com/item/main.naver?code=${stock.종목코드}" target="_blank">${stock.종목코드}</a></td>
