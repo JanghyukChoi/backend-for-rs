@@ -9,6 +9,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi.middleware.cors import CORSMiddleware 
+import pytz  # ✅ pytz 라이브러리 추가
 
 
 app = FastAPI()
@@ -165,10 +166,16 @@ def load_or_create_stock_data():
 
     save_to_firestore(stock_data)
 
-    # ✅ Firestore에 마지막 업데이트 정보 저장
+        # ✅ 한국 시간(KST) 설정
+    kst = pytz.timezone("Asia/Seoul")
+    
+    # ✅ 현재 시간을 KST로 변환
+    now_kst = datetime.datetime.now(kst)
+    
+    # ✅ Firestore에 KST 시간 저장
     db.collection("metadata").document("last_update").set({
-        "date": datetime.datetime.now().strftime("%Y-%m-%d"),
-        "time": datetime.datetime.now().strftime("%H:%M:%S")
+        "date": now_kst.strftime("%Y-%m-%d"),  # 📅 날짜
+        "time": now_kst.strftime("%H:%M:%S")   # ⏰ 시간
     })
 
     return stock_data
@@ -193,4 +200,5 @@ async def get_stocks(page: int = Query(1, alias="page"), limit: int = Query(100,
         "total_pages": (total_items // limit) + (1 if total_items % limit > 0 else 0),
         "current_page": page
     }
+
 
