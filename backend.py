@@ -182,6 +182,10 @@ async def get_stocks(page: int = Query(1, alias="page"), limit: int = Query(100,
     end_idx = start_idx + limit
     total_items = len(df_cached)
 
+    # ✅ 상대강도 내림차순 정렬 적용
+    sorted_data = sorted(df_cached, key=lambda x: x["상대강도"], reverse=True)
+
+    
     paginated_data = df_cached[start_idx:end_idx]
 
     return {
