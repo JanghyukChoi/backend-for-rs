@@ -3,4 +3,4 @@ uvicorn==0.34.0
 pandas==2.2.3
 pykrx==1.0.48
 requests==2.31.0
-firebase-admin==6.5.0
+firebase-admin==6.7.0
