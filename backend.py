@@ -92,13 +92,15 @@ def calculate_relative_strength(ticker):
     except:
         return None
 
-# ✅ Firestore에 데이터 저장
+# ✅ Firestore에 데이터 저장 (상대강도를 float으로 변환)
 def save_to_firestore(data):
     collection_ref = db.collection("stocks")
     for stock in data:
+        stock["상대강도"] = float(stock["상대강도"])  # 🔥 상대강도를 float으로 변환하여 저장
         doc_ref = collection_ref.document(stock["종목코드"])
         doc_ref.set(stock)
-    print(" Firestore에 데이터 저장 완료!")
+    print("✅ Firestore에 데이터 저장 완료!")
+
 
 # ✅ 새로운 데이터 생성이 필요한지 확인하는 함수
 def should_update_data():
@@ -164,6 +166,9 @@ def load_or_create_stock_data():
                 "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
             })
 
+    # ✅ 상대강도 내림차순 정렬
+    stock_data.sort(key=lambda x: x["상대강도"], reverse=True)
+
     save_to_firestore(stock_data)
 
         # ✅ 한국 시간(KST) 설정
@@ -189,10 +194,7 @@ async def get_stocks(page: int = Query(1, alias="page"), limit: int = Query(100,
     end_idx = start_idx + limit
     total_items = len(df_cached)
 
-    # ✅ 상대강도 내림차순 정렬 적용
-    sorted_data = sorted(df_cached, key=lambda x: x["상대강도"], reverse=True)
 
-    
     paginated_data = df_cached[start_idx:end_idx]
 
     return {
