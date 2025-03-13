@@ -123,7 +123,7 @@ def load_or_create_stock_data():
         stocks_ref = db.collection("stocks").order_by("상대강도", direction=firestore.Query.DESCENDING).stream()
         return [doc.to_dict() for doc in stocks_ref]
 
-    print("⚡ 새 데이터 생성 중...")
+    print("⚡ 새 데이터 생성 중..")
     stock_data = []
 
     with ThreadPoolExecutor(max_workers=10) as executor:
