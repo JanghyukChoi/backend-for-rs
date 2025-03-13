@@ -97,7 +97,7 @@ def save_to_firestore(data):
     for stock in data:
         doc_ref = collection_ref.document(stock["종목코드"])
         doc_ref.set(stock)
-    print("✅ Firestore에 데이터 저장 완료!")
+    print(" Firestore에 데이터 저장 완료!")
 
 # ✅ 새로운 데이터 생성이 필요한지 확인하는 함수
 def should_update_data():
