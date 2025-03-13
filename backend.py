@@ -8,9 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi.middleware.cors import CORSMiddleware 
+from fastapi.middleware.cors import CORSMiddleware
 import pytz  # ✅ pytz 라이브러리 추가
-
 
 app = FastAPI()
 
@@ -121,8 +120,8 @@ def should_update_data():
 def load_or_create_stock_data():
     if not should_update_data():
         print("Firestore에서 기존 데이터 로드 중...")
-        # Firestore에서 상대강도가 높은 순으로 문서를 가져옴
-        stocks_ref = db.collection("stocks").order_by("상대강도", direction=firestore.Query.DESCENDING).stream()
+        # Firestore에서 relative_strength가 높은 순으로 문서를 가져옴
+        stocks_ref = db.collection("stocks").order_by("relative_strength", direction=firestore.Query.DESCENDING).stream()
         return [doc.to_dict() for doc in stocks_ref]
 
     print("⚡ 새 데이터 생성 중..")
@@ -164,30 +163,33 @@ def load_or_create_stock_data():
                 "종목코드": ticker.zfill(6),
                 "이름": stock.get_market_ticker_name(ticker),
                 "종가": close_price,
-                "상대강도": round(total_score, 2),
-                "최저가 대비 상승률": f"+{increase_from_low:.2f}%",
-                "최고가 대비 하락률": f"-{decrease_from_high:.2f}%",
+                # ✅ 여기서부터 필드명을 영문으로 교체
+                "relative_strength": round(total_score, 2),
+                "lowest_increase_rate": f"+{increase_from_low:.2f}%",   # 예시로 한글 대신 영문/밑줄 사용
+                "highest_decrease_rate": f"-{decrease_from_high:.2f}%", # 예시로 한글 대신 영문/밑줄 사용
                 "섹터": sector,
                 "시가총액": f"{round(market_cap / 1e8)}억",
                 "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
             })
 
-    # ▼▼▼ [수정] 백분위 순위 변환 + 내림차순 정렬 ▼▼▼
+    # ▼▼▼ 백분위 순위 변환 + 내림차순 정렬 ▼▼▼
     df = pd.DataFrame(stock_data)
 
-    # (선택) 시가총액 500억 필터를 원하신다면 다음과 같이 적용 가능
+    # (선택) 시가총액 500억 필터
     df["시가총액(숫자)"] = df["시가총액"].str.replace("억", "").astype(float)
     df = df[df["시가총액(숫자)"] >= 500]  # 500억 이상만
 
     # 1) 백분위 순위 변환 (1 ~ 99 사이로 스케일링)
-    df["상대강도"] = (df["상대강도"].rank(method="min", pct=True) * 98 + 1).round(2)
+    df["relative_strength"] = (
+        df["relative_strength"].rank(method="min", pct=True) * 98 + 1
+    ).round(2)
 
     # 2) 내림차순 정렬
-    df = df.sort_values(by="상대강도", ascending=False)
+    df = df.sort_values(by="relative_strength", ascending=False)
 
     # 다시 list of dict로 변환
     stock_data = df.to_dict(orient="records")
-    # ▲▲▲ [수정] 백분위 순위 변환 + 내림차순 정렬 ▲▲▲
+    # ▲▲▲ 백분위 순위 변환 + 내림차순 정렬 ▲▲▲
 
     # Firestore 저장
     save_to_firestore(stock_data)
@@ -209,14 +211,14 @@ df_cached = load_or_create_stock_data()
 
 @app.get("/api/stocks")
 async def get_stocks(
-    page: int = Query(1, alias="page"), 
+    page: int = Query(1, alias="page"),
     limit: int = Query(100, alias="limit")
 ):
-    # df_cached는 이미 '백분위 순위 + 내림차순' 상태
-    # 혹시 모르니 재정렬을 해줄 수도 있음 (문자열이 아닌 float으로 변환)
+    # df_cached는 이미 'relative_strength' 백분위 순위 + 내림차순 상태
+    # 혹시 모르니 한번 더 정렬
     sorted_data = sorted(
-        df_cached, 
-        key=lambda x: float(x["상대강도"]), 
+        df_cached,
+        key=lambda x: float(x["relative_strength"]),
         reverse=True
     )
 
@@ -231,5 +233,4 @@ async def get_stocks(
         "total_pages": (total_items // limit) + (1 if total_items % limit > 0 else 0),
         "current_page": page
     }
-
 
