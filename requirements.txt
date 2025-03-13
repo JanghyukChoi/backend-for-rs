@@ -1,0 +1,5 @@
+fastapi==0.115.11
+uvicorn==0.34.0
+pandas==2.2.3
+pykrx==1.0.45
+requests==2.31.0
