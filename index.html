@@ -208,14 +208,14 @@
             const tbody = document.querySelector("#stockTable tbody");
             let html = "";
             stocks.forEach(stock => {
-                let increaseRate = `<span style="color: red;">+${stock["최저가 대비 상승률"]}</span>`;
-                let decreaseRate = `<span style="color: blue;">-${stock["최고가 대비 하락률"]}</span>`;
+                let increaseRate = `<span style="color: red;">+${stock["lowest_increase_rate"]}</span>`;
+                let decreaseRate = `<span style="color: blue;">-${stock["highest_decrease_rate"]}</span>`;
 
                 html += `<tr>
                     <td><a href="https://finance.naver.com/item/main.naver?code=${stock.종목코드}" target="_blank">${stock.종목코드}</a></td>
                     <td>${stock.이름}</td>
                     <td>${stock.종가}</td>
-                    <td>${stock.상대강도.toFixed(2)}</td>
+                    <td>${stock.relative_strength.toFixed(2)}</td>
                     <td>${increaseRate}</td>
                     <td>${decreaseRate}</td>
                     <td>${stock.섹터}</td>
