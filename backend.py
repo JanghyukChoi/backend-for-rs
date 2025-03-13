@@ -120,7 +120,7 @@ def should_update_data():
 def load_or_create_stock_data():
     if not should_update_data():
         print("✅ Firestore에서 기존 데이터 로드 중...")
-        stocks_ref = db.collection("stocks").stream()
+        stocks_ref = db.collection("stocks").order_by("상대강도", direction=firestore.Query.DESCENDING).stream()
         return [doc.to_dict() for doc in stocks_ref]
 
     print("⚡ 새 데이터 생성 중...")
@@ -129,11 +129,27 @@ def load_or_create_stock_data():
     with ThreadPoolExecutor(max_workers=10) as executor:
         results = list(executor.map(calculate_relative_strength, all_stocks))
 
+    market_cap_data = stock.get_market_cap(today)
+
+    # ✅ 섹터별 평균 상대강도 계산
+    sector_scores = {}
+    for i, result in enumerate(results):
+        if result:
+            total_score, _, _, _ = result
+            ticker = all_stocks[i]
+            sector = sector_map.get(ticker, "알 수 없음")
+            if sector not in sector_scores:
+                sector_scores[sector] = []
+            sector_scores[sector].append(total_score)
+
+    sector_rank = {sector: idx + 1 for idx, (sector, _) in enumerate(sorted(sector_scores.items(), key=lambda x: sum(x[1]) / len(x[1]), reverse=True))}
+
     for i, result in enumerate(results):
         if result:
             total_score, close_price, increase_from_low, decrease_from_high = result
             ticker = all_stocks[i]
             sector = sector_map.get(ticker, "알 수 없음")
+            market_cap = market_cap_data.loc[ticker, "시가총액"] if ticker in market_cap_data.index else 0
             stock_data.append({
                 "종목코드": ticker.zfill(6),
                 "이름": stock.get_market_ticker_name(ticker),
@@ -141,13 +157,15 @@ def load_or_create_stock_data():
                 "상대강도": round(total_score, 2),
                 "최저가 대비 상승률": f"+{increase_from_low:.2f}%",
                 "최고가 대비 하락률": f"-{decrease_from_high:.2f}%",
-                "섹터": sector
+                "섹터": sector,
+                "시가총액": f"{round(market_cap / 1e8)}억",
+                "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
             })
 
     # ✅ Firestore에 데이터 저장
     save_to_firestore(stock_data)
 
-    # ✅ 마지막 업데이트 날짜 Firestore에 저장
+    # ✅ Firestore에 마지막 업데이트 정보 저장
     db.collection("metadata").document("last_update").set({
         "date": datetime.datetime.now().strftime("%Y-%m-%d"),
         "time": datetime.datetime.now().strftime("%H:%M:%S")
@@ -171,3 +189,4 @@ async def get_stocks(page: int = Query(1, alias="page"), limit: int = Query(100,
         "total_pages": (total_items // limit) + (1 if total_items % limit > 0 else 0),
         "current_page": page
     }
+
