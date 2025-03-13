@@ -159,8 +159,8 @@ def load_or_create_stock_data():
                 "최저가 대비 상승률": f"+{increase_from_low:.2f}%",
                 "최고가 대비 하락률": f"-{decrease_from_high:.2f}%",
                 "섹터": sector,
-                "시가총액": f"{round(market_cap / 1e8)} 억",
-                "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')} 위"
+                "시가총액": f"{round(market_cap / 1e8)}억",
+                "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
             })
 
     save_to_firestore(stock_data)
