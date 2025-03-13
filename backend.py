@@ -5,7 +5,9 @@ from pykrx import stock
 import datetime
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from fastapi.middleware.cors import CORSMiddleware
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 app = FastAPI()
 
@@ -18,9 +20,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ CSV 저장 경로
-DATA_FILE = "stock_data.csv"
-LAST_UPDATE_FILE = "last_update.txt"  # ✅ 마지막 업데이트 날짜 저장 파일
+# ✅ Firebase 인증 설정 (Railway 환경 변수에서 JSON 로드)
+firebase_config = json.loads(os.getenv("FIREBASE_CREDENTIALS"))
+cred = credentials.Certificate(firebase_config)
+firebase_admin.initialize_app(cred)
+
+# ✅ Firestore 연결
+db = firestore.client()
 
 # ✅ 현재 날짜 및 1년 전 날짜 계산
 today = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y%m%d")
@@ -83,9 +89,13 @@ def calculate_relative_strength(ticker):
     except:
         return None
 
-# ✅ 시가총액을 억 단위로 변환하는 함수
-def format_market_cap(value):
-    return f"{round(value / 1e8)}억"
+# ✅ Firestore에 데이터 저장
+def save_to_firestore(data):
+    collection_ref = db.collection("stocks")
+    for stock in data:
+        doc_ref = collection_ref.document(stock["종목코드"])
+        doc_ref.set(stock)
+    print("✅ Firestore에 데이터 저장 완료!")
 
 # ✅ 새로운 데이터 생성이 필요한지 확인하는 함수
 def should_update_data():
@@ -93,10 +103,11 @@ def should_update_data():
     now = datetime.datetime.now()
     is_after_330 = now.hour > 15 or (now.hour == 15 and now.minute >= 30)
 
-    if os.path.exists(DATA_FILE) and os.path.exists(LAST_UPDATE_FILE):
-        with open(LAST_UPDATE_FILE, "r") as f:
-            last_update_date = f.read().strip()
+    doc_ref = db.collection("metadata").document("last_update")
+    doc = doc_ref.get()
 
+    if doc.exists:
+        last_update_date = doc.to_dict().get("date", "")
         today_str = now.strftime("%Y-%m-%d")
         if last_update_date == today_str and not is_after_330:
             return False
@@ -106,8 +117,9 @@ def should_update_data():
 # ✅ 데이터 로드 또는 생성
 def load_or_create_stock_data():
     if not should_update_data():
-        print("✅ 기존 데이터 로드 중...")
-        return pd.read_csv(DATA_FILE)  # 기존 데이터 로드
+        print("✅ Firestore에서 기존 데이터 로드 중...")
+        stocks_ref = db.collection("stocks").stream()
+        return [doc.to_dict() for doc in stocks_ref]
 
     print("⚡ 새 데이터 생성 중...")
     stock_data = []
@@ -120,36 +132,29 @@ def load_or_create_stock_data():
             total_score, close_price, increase_from_low, decrease_from_high = result
             ticker = all_stocks[i]
             sector = sector_map.get(ticker, "알 수 없음")
-            stock_data.append([
-                ticker, stock.get_market_ticker_name(ticker), close_price, total_score,
-                f"{increase_from_low:.2f}%", f"{decrease_from_high:.2f}%", sector
-            ])
+            stock_data.append({
+                "종목코드": ticker.zfill(6),
+                "이름": stock.get_market_ticker_name(ticker),
+                "종가": close_price,
+                "상대강도": round(total_score, 2),
+                "최저가 대비 상승률": f"+{increase_from_low:.2f}%",
+                "최고가 대비 하락률": f"-{decrease_from_high:.2f}%",
+                "섹터": sector
+            })
 
-    df = pd.DataFrame(stock_data, columns=["종목코드", "이름", "종가", "상대강도", "최저가 대비 상승률", "최고가 대비 하락률", "섹터"])
-    df["상대강도"] = (df["상대강도"].rank(method="min", pct=True) * 98 + 1).round(2)
+    # ✅ Firestore에 데이터 저장
+    save_to_firestore(stock_data)
 
-    market_cap_data = stock.get_market_cap(today)
-    df["시가총액"] = df["종목코드"].apply(lambda x: market_cap_data.loc[x, "시가총액"] if x in market_cap_data.index else 0)
-    df = df[df["시가총액"] >= 500e8]
-    df["시가총액"] = df["시가총액"].apply(format_market_cap)
+    # ✅ 마지막 업데이트 날짜 Firestore에 저장
+    db.collection("metadata").document("last_update").set({
+        "date": datetime.datetime.now().strftime("%Y-%m-%d"),
+        "time": datetime.datetime.now().strftime("%H:%M:%S")
+    })
 
-    sector_rank = df.groupby("섹터")["상대강도"].mean().rank(ascending=False).astype(int)
-    sector_rank_df = pd.DataFrame({"섹터": sector_rank.index, "섹터 수익률 순위": sector_rank.values})
-    sector_rank_df["섹터 수익률 순위"] = sector_rank_df["섹터 수익률 순위"].apply(lambda x: f"섹터 수익률 {x}위")
+    return stock_data
 
-    df = df.merge(sector_rank_df, on="섹터", how="left")
-
-    df = df.sort_values(by="상대강도", ascending=False)
-    df.to_csv(DATA_FILE, index=False)
-
-    with open(LAST_UPDATE_FILE, "w") as f:
-        f.write(datetime.datetime.now().strftime("%Y-%m-%d"))
-
-    return df
-
-# ✅ FastAPI 실행 시, 기존 데이터 로드 또는 새로 계산
+# ✅ FastAPI 실행 시, 기존 데이터 Firestore에서 로드 또는 새로 계산
 df_cached = load_or_create_stock_data()
-
 
 @app.get("/api/stocks")
 async def get_stocks(page: int = Query(1, alias="page"), limit: int = Query(100, alias="limit")):
@@ -157,10 +162,7 @@ async def get_stocks(page: int = Query(1, alias="page"), limit: int = Query(100,
     end_idx = start_idx + limit
     total_items = len(df_cached)
 
-    # ✅ 종목코드를 문자열로 변환하여 앞의 0이 사라지지 않도록 수정
-    df_cached["종목코드"] = df_cached["종목코드"].astype(str).str.zfill(6)
-
-    paginated_data = df_cached.iloc[start_idx:end_idx].to_dict(orient="records")
+    paginated_data = df_cached[start_idx:end_idx]
 
     return {
         "stocks": paginated_data,
