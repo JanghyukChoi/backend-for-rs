@@ -9,7 +9,8 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi.middleware.cors import CORSMiddleware 
-import pytz 
+import pytz  # ✅ pytz 라이브러리 추가
+
 
 app = FastAPI()
 
@@ -44,8 +45,6 @@ sector_codes = ['G25', 'G35', 'G50', 'G40', 'G10', 'G20', 'G55', 'G30', 'G15', '
 
 # ✅ 종목별 섹터 매핑 딕셔너리
 sector_map = {}
-
-print("시작합니다")
 
 # ✅ WICS 섹터 데이터 병렬 크롤링
 def fetch_sector_data(sec_cd):
@@ -93,15 +92,13 @@ def calculate_relative_strength(ticker):
     except:
         return None
 
-# ✅ Firestore에 데이터 저장 (상대강도를 float으로 변환)
+# ✅ Firestore에 데이터 저장
 def save_to_firestore(data):
     collection_ref = db.collection("stocks")
-    for stock in data:
-        stock["상대강도"] = float(stock["상대강도"])  # 🔥 상대강도를 float으로 변환하여 저장
-        doc_ref = collection_ref.document(stock["종목코드"])
-        doc_ref.set(stock)
-    print("✅ Firestore에 데이터 저장 완료!")
-
+    for stock_doc in data:
+        doc_ref = collection_ref.document(stock_doc["종목코드"])
+        doc_ref.set(stock_doc)
+    print(" Firestore에 데이터 저장 완료!")
 
 # ✅ 새로운 데이터 생성이 필요한지 확인하는 함수
 def should_update_data():
@@ -124,6 +121,7 @@ def should_update_data():
 def load_or_create_stock_data():
     if not should_update_data():
         print("Firestore에서 기존 데이터 로드 중...")
+        # Firestore에서 상대강도가 높은 순으로 문서를 가져옴
         stocks_ref = db.collection("stocks").order_by("상대강도", direction=firestore.Query.DESCENDING).stream()
         return [doc.to_dict() for doc in stocks_ref]
 
@@ -147,8 +145,15 @@ def load_or_create_stock_data():
                 sector_scores[sector] = []
             sector_scores[sector].append(total_score)
 
-    sector_rank = {sector: idx + 1 for idx, (sector, _) in enumerate(sorted(sector_scores.items(), key=lambda x: sum(x[1]) / len(x[1]), reverse=True))}
+    # 섹터별 평균 상대강도의 내림차순 기준으로 순위 매기기
+    sector_rank = {
+        sector: idx + 1
+        for idx, (sector, _) in enumerate(
+            sorted(sector_scores.items(), key=lambda x: sum(x[1]) / len(x[1]), reverse=True)
+        )
+    }
 
+    # 종목별 데이터 생성
     for i, result in enumerate(results):
         if result:
             total_score, close_price, increase_from_low, decrease_from_high = result
@@ -167,17 +172,30 @@ def load_or_create_stock_data():
                 "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
             })
 
-    # ✅ 상대강도 내림차순 정렬
-    stock_data.sort(key=lambda x: x["상대강도"], reverse=True)
+    # ▼▼▼ [수정] 백분위 순위 변환 + 내림차순 정렬 ▼▼▼
+    df = pd.DataFrame(stock_data)
 
+    # (선택) 시가총액 500억 필터를 원하신다면 다음과 같이 적용 가능
+    df["시가총액(숫자)"] = df["시가총액"].str.replace("억", "").astype(float)
+    df = df[df["시가총액(숫자)"] >= 500]  # 500억 이상만
+
+    # 1) 백분위 순위 변환 (1 ~ 99 사이로 스케일링)
+    df["상대강도"] = (df["상대강도"].rank(method="min", pct=True) * 98 + 1).round(2)
+
+    # 2) 내림차순 정렬
+    df = df.sort_values(by="상대강도", ascending=False)
+
+    # 다시 list of dict로 변환
+    stock_data = df.to_dict(orient="records")
+    # ▲▲▲ [수정] 백분위 순위 변환 + 내림차순 정렬 ▲▲▲
+
+    # Firestore 저장
     save_to_firestore(stock_data)
 
-        # ✅ 한국 시간(KST) 설정
+    # ✅ 한국 시간(KST) 설정
     kst = pytz.timezone("Asia/Seoul")
-    
-    # ✅ 현재 시간을 KST로 변환
     now_kst = datetime.datetime.now(kst)
-    
+
     # ✅ Firestore에 KST 시간 저장
     db.collection("metadata").document("last_update").set({
         "date": now_kst.strftime("%Y-%m-%d"),  # 📅 날짜
@@ -190,13 +208,23 @@ def load_or_create_stock_data():
 df_cached = load_or_create_stock_data()
 
 @app.get("/api/stocks")
-async def get_stocks(page: int = Query(1, alias="page"), limit: int = Query(100, alias="limit")):
+async def get_stocks(
+    page: int = Query(1, alias="page"), 
+    limit: int = Query(100, alias="limit")
+):
+    # df_cached는 이미 '백분위 순위 + 내림차순' 상태
+    # 혹시 모르니 재정렬을 해줄 수도 있음 (문자열이 아닌 float으로 변환)
+    sorted_data = sorted(
+        df_cached, 
+        key=lambda x: float(x["상대강도"]), 
+        reverse=True
+    )
+
     start_idx = (page - 1) * limit
     end_idx = start_idx + limit
-    total_items = len(df_cached)
+    total_items = len(sorted_data)
 
-
-    paginated_data = df_cached[start_idx:end_idx]
+    paginated_data = sorted_data[start_idx:end_idx]
 
     return {
         "stocks": paginated_data,
