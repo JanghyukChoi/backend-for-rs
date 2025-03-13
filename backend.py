@@ -119,7 +119,7 @@ def should_update_data():
 # ✅ 데이터 로드 또는 생성
 def load_or_create_stock_data():
     if not should_update_data():
-        print("✅ Firestore에서 기존 데이터 로드 중...")
+        print("Firestore에서 기존 데이터 로드 중...")
         stocks_ref = db.collection("stocks").order_by("상대강도", direction=firestore.Query.DESCENDING).stream()
         return [doc.to_dict() for doc in stocks_ref]
 
