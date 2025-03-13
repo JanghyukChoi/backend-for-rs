@@ -9,8 +9,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi.middleware.cors import CORSMiddleware 
-import pytz  # ✅ pytz 라이브러리 추가
-
+import pytz 
 
 app = FastAPI()
 
@@ -45,6 +44,8 @@ sector_codes = ['G25', 'G35', 'G50', 'G40', 'G10', 'G20', 'G55', 'G30', 'G15', '
 
 # ✅ 종목별 섹터 매핑 딕셔너리
 sector_map = {}
+
+print("시작합니다")
 
 # ✅ WICS 섹터 데이터 병렬 크롤링
 def fetch_sector_data(sec_cd):
