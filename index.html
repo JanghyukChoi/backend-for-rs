@@ -2,44 +2,130 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <!-- 뷰포트 설정: 모바일 화면에서 기기 폭에 맞춰 보이도록 함 -->
+  <!-- 모바일 대응을 위한 뷰포트 설정 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>상대강도(RS) 기반 강세 종목 분석 리포트</title>
   <style>
-    /* 전체 영역 스타일 */
+    /*********************************************
+     * [1] 전체 페이지 & 반응형 기본 설정
+     *********************************************/
     body {
       font-family: Arial, sans-serif;
       margin: 0 auto;
       padding: 20px;
-      /* 큰 화면에서는 최대 1100px까지, 작은 화면에서는 100% 가깝게 */
-      max-width: 1100px;
+      max-width: 1100px; /* 데스크톱에서는 최대 1100px, 모바일에서는 화면 폭에 맞게 */
+      box-sizing: border-box; /* 패딩 포함 박스 사이징 */
+      position: relative; /* 사이드바 위치 조정을 위해 */
     }
-
-    /* 제목 스타일 */
     h1 {
       text-align: center;
       font-size: 28px;
       font-weight: bold;
       margin-bottom: 10px;
+      margin-top: 0; 
     }
 
-    /* 상단 컨테이너(업데이트 시간 + 검색창) */
+    /*********************************************
+     * [2] 햄버거 메뉴 & 사이드바
+     *********************************************/
+    /* 메뉴 아이콘(왼쪽 상단) */
+    .menu-icon {
+      font-size: 24px;
+      cursor: pointer;
+      position: absolute;
+      left: 20px;
+      top: 20px;
+      z-index: 9999;
+    }
+
+    /* 사이드바 기본 스타일 */
+    #sidebar {
+      position: fixed; 
+      top: 0; 
+      left: -300px;     /* 처음엔 화면 바깥에 위치 */
+      width: 300px;
+      height: 100%;
+      background-color: #f8f8f8;
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+      transition: left 0.3s ease; /* 좌우 슬라이드 애니메이션 */
+      z-index: 9998;     /* 본문 위에 표시되도록 */
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 사이드바 펼쳐진 상태 */
+    #sidebar.open {
+      left: 0; /* 화면 안으로 들어옴 */
+    }
+
+    /* 사이드바 상단 헤더 */
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      font-weight: bold;
+      border-bottom: 1px solid #ccc;
+    }
+
+    /* 사이드바 닫기 버튼(오른쪽 상단) */
+    .close-btn {
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    /* 사이드바 메뉴 리스트 */
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .sidebar-menu li {
+      padding: 0.8rem 1rem;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+    .sidebar-menu li:hover {
+      background-color: #ddd;
+    }
+
+    /* 사이드바 내 컨텐츠 영역 (클릭 시 보여줄 텍스트) */
+    .sidebar-content {
+      flex: 1; /* 사이드바 높이 확장에 따라 자동으로 늘어남 */
+      padding: 1rem;
+      overflow-y: auto; /* 내용이 길면 스크롤 가능 */
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .sidebar-content h3 {
+      margin-top: 1rem;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .sidebar-content p {
+      margin-bottom: 1rem;
+    }
+    .sidebar-content code {
+      background-color: #eee;
+      padding: 0 4px;
+    }
+
+    /*********************************************
+     * [3] 상단 컨테이너(업데이트 시간 + 검색창)
+     *********************************************/
     .top-container {
       display: flex;
-      justify-content: space-between; /* 좌우로 배치 */
+      justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-      gap: 10px; /* 요소 사이 간격 */
-      flex-wrap: wrap; /* 화면이 좁을 때 줄바꿈 */
+      margin-bottom: 10px; 
+      gap: 10px;
+      flex-wrap: wrap; /* 화면 좁으면 줄바꿈 */
     }
-
     .update-time {
       font-size: 14px;
       font-weight: bold;
       color: #333;
     }
-
-    /* 검색창 컨테이너 */
     .search-container {
       display: flex;
       justify-content: flex-end;
@@ -47,16 +133,15 @@
       gap: 10px;
       margin-bottom: 15px;
     }
-
-    /* 검색창 및 버튼 */
+    /* 검색창 & 버튼 */
     input {
       padding: 10px;
       font-size: 16px;
       border: 2px solid #ccc;
       border-radius: 5px;
       width: 200px;
+      box-sizing: border-box;
     }
-
     button {
       padding: 10px 15px;
       font-size: 16px;
@@ -71,33 +156,29 @@
       background-color: #0056b3;
     }
 
-    /* 테이블을 감싸는 래퍼: 화면이 작을 때 가로 스크롤 가능하게 */
+    /*********************************************
+     * [4] 테이블 & 페이지네이션
+     *********************************************/
     .table-wrapper {
       width: 100%;
-      overflow-x: auto;  /* 가로 스크롤 허용 */
+      overflow-x: auto; /* 화면이 좁을 때 가로 스크롤 */
       margin-top: 10px;
     }
-
-    /* 테이블 스타일 */
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 800px; /* 화면이 작아도 테이블이 너무 작아지지 않도록 최소 폭 설정 */
+      min-width: 800px; /* 화면 좁아도 테이블이 너무 작아지지 않도록 */
     }
-
     th, td {
       border: 1px solid #ccc;
       padding: 12px 8px;
       text-align: center;
       white-space: nowrap;
     }
-
     th {
       background-color: #f2f2f2;
       font-weight: bold;
     }
-
-    /* 페이지네이션 버튼 스타일 */
     .pagination {
       margin-top: 20px;
       text-align: center;
@@ -111,7 +192,7 @@
       background-color: white;
       color: black;
       transition: 0.3s;
-      min-width: 40px; 
+      min-width: 40px;
     }
     .pagination button:hover {
       background-color: #007bff;
@@ -124,62 +205,57 @@
       cursor: default;
     }
 
-    /* 화면이 좁아졌을 때(가로폭 768px 이하)에 대한 반응형 스타일 */
+    /*********************************************
+     * [5] 반응형 (화면 <= 768px)
+     *********************************************/
     @media (max-width: 768px) {
       body {
         padding: 10px;
       }
-
       h1 {
         font-size: 22px;
         margin-bottom: 15px;
       }
-
       .top-container {
-        flex-direction: column; 
+        flex-direction: column;
         align-items: flex-start;
       }
-
       .search-container {
         width: 100%;
         justify-content: space-between;
         margin-bottom: 10px;
       }
-
-      /* 검색창 폭 줄이기 */
       input {
         width: 100%;
         font-size: 14px;
       }
-
-      /* 버튼 크기 약간 축소 */
       button {
         padding: 8px 12px;
         font-size: 14px;
       }
-
-      /* 테이블 글자 크기와 패딩 줄이기 */
       th, td {
         padding: 8px 4px;
         font-size: 14px;
       }
-
+      table {
+        min-width: 600px;
+      }
       .pagination button {
         padding: 8px 12px;
         font-size: 12px;
-      }
-
-      /* 테이블 최소 폭도 조금 줄임 */
-      table {
-        min-width: 600px;
       }
     }
   </style>
 </head>
 <body>
-  <!-- 제목 -->
+
+  <!-- [A] 햄버거 아이콘 -->
+  <div class="menu-icon" onclick="toggleSidebar()">&#9776;</div>
+
+  <!-- [B] 페이지 메인 제목 -->
   <h1>📌 상대강도(RS) 기반 강세 종목 분석 리포트</h1>
 
+  <!-- [C] 상단(업데이트 시간 + 검색) -->
   <div class="top-container">
     <div id="updateTime" class="update-time"></div>
     <div class="search-container">
@@ -188,7 +264,7 @@
     </div>
   </div>
 
-  <!-- 테이블을 감싸는 래퍼로 가로 스크롤 허용 -->
+  <!-- [D] 테이블 영역 -->
   <div class="table-wrapper">
     <table id="stockTable">
       <thead>
@@ -207,11 +283,28 @@
       <tbody></tbody>
     </table>
   </div>
-
-  <!-- 페이지네이션 버튼 -->
+  <!-- 페이지네이션 영역 -->
   <div class="pagination" id="pagination"></div>
 
+  <!-- [E] 왼쪽 사이드바 (메뉴 탭) -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <span>📋 메뉴</span>
+      <span class="close-btn" onclick="toggleSidebar()">&times;</span>
+    </div>
+    <ul class="sidebar-menu">
+      <li onclick="showRSContent()">상대강도(RS)란?</li>
+      <li onclick="showDevIntro()">사이트 개발자 소개</li>
+    </ul>
+    <div class="sidebar-content" id="sidebarContent">
+      <!-- 클릭 시 여기에 내용이 동적으로 표시됨 -->
+    </div>
+  </div>
+
   <script>
+    /*********************************************
+     * 전역 변수 & 초기 설정
+     *********************************************/
     let allStocks = []; 
     let currentPage = 1;
     let totalPages = 1;
@@ -219,12 +312,142 @@
     let filteredStocks = [];
     const API_URL = "https://backend-for-rs-production.up.railway.app/api/stocks"; 
 
+    // 사이드바 열고 닫기
+    function toggleSidebar() {
+      const sidebar = document.getElementById("sidebar");
+      sidebar.classList.toggle("open");
+    }
+
+    // [1] 사이드바에서 "상대강도(RS)란?" 클릭 시 표시할 텍스트
+    const rsText = `
+<h3>상대강도(RS)란?</h3>
+<p>
+<strong>상대강도(Relative Strength, RS)</strong>는 특정 주식이 시장 전체 또는 다른 종목 대비 얼마나 강한 상승세를 보이는지를 측정하는 지표입니다. 
+단순 등락률 비교가 아니라, 최근 일정 기간 동안의 성과를 종합적으로 평가하여 가장 강한 주식을 찾아내는 것이 핵심 목표입니다.
+</p>
+<h4>📌 주요 개념</h4>
+<ul>
+  <li>윌리엄 오닐(William O'Neil): CAN SLIM에서 <em>상대강도지수(RS Rating)</em>를 활용.</li>
+  <li>마크 미너비니(Mark Minervini): "SEPA(Stock Entry Point Analysis)" 전략에서, <strong>"강한 주식이 더 강해진다"</strong>는 원칙 강조.</li>
+</ul>
+<p>
+✅ 강한 종목을 사야 더 높은 수익을 기대할 수 있다.<br/>
+✅ 단순한 주가 상승률이 아닌, 시장 대비 얼마나 강한 상승세를 보였는지가 중요하다.<br/>
+✅ 기술적 강세를 보이는 주식이 추세를 지속할 확률이 높다.
+</p>
+
+<h4>상대강도(RS) 계산 방법</h4>
+<p>
+대표적인 방식은 윌리엄 오닐의 <strong>RS Rating</strong> 계산법과 마크 미너비니의 <strong>상대강도 점수</strong> 산정 방식입니다.
+</p>
+<h5>✅ 1. 윌리엄 오닐의 RS Rating 계산법</h5>
+<p>
+지난 12개월간 주가 상승률을 시장 내 모든 종목과 비교하여 
+<b>백분율 순위(1~99점)</b>로 정규화.<br/>
+예: RS Rating이 90이라면, 시장 내 90% 주식보다 강한 상승률을 기록했다는 의미.
+</p>
+<p>
+<strong>계산 방식:</strong><br/>
+1) 최근 12개월 동안의 주가 상승률 계산<br/>
+2) 이를 모든 종목과 비교, 퍼센타일 순위(Percentile Ranking) 매김<br/>
+3) 상위 99점이 가장 강한 주식, 1점이 가장 약한 주식
+</p>
+<p>
+<strong>해석 방법:</strong><br/>
+✔ RS Rating 80 이상: 강한 종목<br/>
+✔ RS Rating 90 이상: 초강세 종목<br/>
+✔ RS Rating 60 미만: 시장 대비 약한 종목
+</p>
+
+<h5>✅ 2. 마크 미너비니의 상대강도 점수 계산법</h5>
+<p>
+미너비니는 단순히 12개월 수익률만 보는 게 아니라, 
+단기·중기 모멘텀을 종합평가하여 상대강도를 측정합니다.
+</p>
+<p>
+<strong>계산 공식:</strong><br/>
+<code>RS = (2주 수익률 × 2) + 1개월 수익률 + 3개월 수익률 + 6개월 수익률</code><br/>
+✔ 2주 수익률에 2배 가중 → 최근 상승 추세 반영<br/>
+✔ 장기 수익률도 반영 → 지속적 상승 종목 강조<br/>
+✔ 점수를 1~99로 정규화하여 비교
+</p>
+<p>
+<strong>예시 계산:</strong><br/>
+A 종목:<br/>
+2주:+5%, 1개월:+8%, 3개월:+12%, 6개월:+20%<br/>
+<code>RS = (5×2)+8+12+20 = 50</code><br/>
+B 종목:<br/>
+2주:+3%, 1개월:+5%, 3개월:+10%, 6개월:+15%<br/>
+<code>RS = (3×2)+5+10+15 = 36</code><br/>
+→ A 종목이 더 강한 종목으로 평가.
+</p>
+`;
+
+    // [2] 사이드바에서 "사이트 개발자 소개" 클릭 시 표시할 텍스트
+    const devIntro = `
+<h3>📚 한양대생의 경제 & 주식 스터디 블로그</h3>
+<p>
+안녕하세요! 저는 한양대학교에서 경제금융학과와 소프트웨어융합을 전공 중인 대학생입니다.
+공부한 내용을 기록하고 공유하기 위해 <strong>네이버 블로그</strong>를 운영하고 있습니다.
+아직 배울 것이 많지만, 매일 조금씩 성장하는 과정 속에서 
+경제와 주식에 대한 다양한 인사이트를 나누고자 합니다.
+</p>
+
+<p><strong>📌 네이버 블로그:</strong> <em>jangsdaytrading</em></p>
+
+<h4>💡 주식 공부 & 트레이딩 스터디</h4>
+<ul>
+  <li>윌리엄 오닐(William O’Neil) 투자 전략 → 돌파매매(Breakout Trading) 관심</li>
+  <li>상대강도(RS) 지표 적극 활용</li>
+  <li>기술적 분석 + 경제 흐름 + 매매 패턴 연구</li>
+</ul>
+
+<h4>📈 한국 주식시장 & 경제 흐름 연구</h4>
+<p>
+한국 주식시장에서 트레이딩하며, 다양한 자료를 분석하여 
+안정적이고 지속가능한 투자 전략을 모색 중입니다.
+</p>
+<ul>
+  <li>실전 매매 사례 정리 & 트레이딩 복기</li>
+  <li>경제 이슈 분석 & 시장 전망</li>
+  <li>기술적 분석 & RS 기반 종목 발굴</li>
+</ul>
+
+<h4>✏ 매일 1개씩 경제 관련 포스팅</h4>
+<p>
+꾸준히 경제 관련 게시물을 작성, 시장 흐름을 분석하며 
+투자에 대한 생각을 정리하고 있습니다.
+</p>
+<ul>
+  <li>글로벌 경제 뉴스 & 시장 동향 분석</li>
+  <li>한국 주식시장 트렌드 및 투자 아이디어 공유</li>
+  <li>실전 매매 복기 & 배운 점 기록</li>
+</ul>
+
+<p>
+<strong>📌 네이버 블로그 방문하기</strong> → <em>jangsdaytrading</em><br/>
+함께 공부하며 성장하는 공간이 되길 바랍니다!
+</p>
+`;
+
+    // 사이드바 컨텐츠 교체
+    function showRSContent() {
+      document.getElementById("sidebarContent").innerHTML = rsText;
+    }
+    function showDevIntro() {
+      document.getElementById("sidebarContent").innerHTML = devIntro;
+    }
+
+    /*********************************************
+     * [표] 데이터 로드 & 검색 & 페이지네이션
+     *********************************************/
+    // 초기 모든 데이터 로드
     async function fetchAllStocks() {
       try {
-        // 초기 로딩시 전체 데이터(최대 10,000개)를 가져와서 필터 / 페이지네이션 활용
-        // ※ 실제 서비스에서는 서버 페이징을 적극 권장
+        // 실제 서비스에선 서버 페이징을 권장하지만, 여기선 단순히 대량 데이터를 한 번에 가져와 필터/페이지네이션
         const response = await fetch(`${API_URL}?page=1&limit=10000`);
         const data = await response.json();
+
         allStocks = data.stocks;
         totalPages = Math.ceil(allStocks.length / limit);
         filteredStocks = [...allStocks];
@@ -243,7 +466,6 @@
       const minutes = now.getMinutes();
 
       let updateDate;
-      // 오후 3시 30분 이후라면 오늘 날짜, 그 전이면 어제 날짜로 표시
       if (hours > 15 || (hours === 15 && minutes >= 30)) {
         updateDate = now;
       } else {
@@ -269,6 +491,7 @@
       let html = "";
 
       stocks.forEach(stock => {
+        // 백엔드에서 이미 + / -가 포함된 문자열을 주므로, 그대로 출력
         let increaseRate = `<span style="color: red;">${stock["lowest_increase_rate"]}</span>`;
         let decreaseRate = `<span style="color: blue;">${stock["highest_decrease_rate"]}</span>`;
 
@@ -287,6 +510,7 @@
           <td>${stock.시가총액}</td>
         </tr>`;
       });
+
       tbody.innerHTML = html;
     }
 
@@ -294,16 +518,19 @@
       const paginationDiv = document.getElementById("pagination");
       paginationDiv.innerHTML = "";
 
+      // 이전
       paginationDiv.innerHTML += `
         <button onclick="changePage(${currentPage - 1})"
           ${currentPage === 1 ? "disabled" : ""}>이전</button>`;
 
+      // 페이지 번호들
       for (let i = 1; i <= totalPages; i++) {
         paginationDiv.innerHTML += `
           <button onclick="changePage(${i})"
             ${i === currentPage ? "disabled" : ""}>${i}</button>`;
       }
 
+      // 다음
       paginationDiv.innerHTML += `
         <button onclick="changePage(${currentPage + 1})"
           ${currentPage === totalPages ? "disabled" : ""}>다음</button>`;
@@ -314,24 +541,30 @@
         currentPage = page;
         updateTable(getCurrentPageData());
         updatePagination();
+        // 페이지 전환 시 스크롤 최상단 이동
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     }
 
     function filterTable() {
-      const searchTerm = document.getElementById("searchInput").value.trim().toLowerCase();
-      filteredStocks = allStocks.filter(stock => 
+      const searchTerm = document
+        .getElementById("searchInput")
+        .value.trim()
+        .toLowerCase();
+
+      filteredStocks = allStocks.filter(stock =>
         stock.이름.toLowerCase().includes(searchTerm)
       );
+
       totalPages = Math.ceil(filteredStocks.length / limit);
       currentPage = 1;
       updateTable(getCurrentPageData());
       updatePagination();
     }
 
-    document.getElementById("searchInput")
-            .addEventListener("keypress", function(event) {
-      if (event.key === "Enter") {
+    // 엔터키로 검색
+    document.getElementById("searchInput").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
         filterTable();
       }
     });
@@ -341,3 +574,4 @@
   </script>
 </body>
 </html>
+
