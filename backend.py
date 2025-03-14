@@ -91,13 +91,17 @@ def calculate_relative_strength(ticker):
     except:
         return None
 
-# ✅ Firestore에 데이터 저장
+# ✅ Firestore에 데이터 "배치"로 저장 (한 번에 교체)
 def save_to_firestore(data):
     collection_ref = db.collection("stocks")
+    batch = db.batch()  # 배치 객체 생성
+
     for stock_doc in data:
         doc_ref = collection_ref.document(stock_doc["종목코드"])
-        doc_ref.set(stock_doc)
-    print(" Firestore에 데이터 저장 완료!")
+        batch.set(doc_ref, stock_doc)
+    batch.commit()  # 여기서 한꺼번에 커밋
+
+    print("Firestore에 데이터 일괄 저장 완료!")
 
 # ✅ 새로운 데이터 생성이 필요한지 확인하는 함수
 def should_update_data():
@@ -163,10 +167,10 @@ def load_or_create_stock_data():
                 "종목코드": ticker.zfill(6),
                 "이름": stock.get_market_ticker_name(ticker),
                 "종가": close_price,
-                # ✅ 여기서부터 필드명을 영문으로 교체
+                # ✅ 영어 필드명
                 "relative_strength": round(total_score, 2),
-                "lowest_increase_rate": f"+{increase_from_low:.2f}%",   # 예시로 한글 대신 영문/밑줄 사용
-                "highest_decrease_rate": f"-{decrease_from_high:.2f}%", # 예시로 한글 대신 영문/밑줄 사용
+                "lowest_increase_rate": f"+{increase_from_low:.2f}%",
+                "highest_decrease_rate": f"-{decrease_from_high:.2f}%",
                 "섹터": sector,
                 "시가총액": f"{round(market_cap / 1e8)}억",
                 "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
@@ -191,7 +195,7 @@ def load_or_create_stock_data():
     stock_data = df.to_dict(orient="records")
     # ▲▲▲ 백분위 순위 변환 + 내림차순 정렬 ▲▲▲
 
-    # Firestore 저장
+    # Firestore 저장 (배치로 한 번에)
     save_to_firestore(stock_data)
 
     # ✅ 한국 시간(KST) 설정
@@ -215,7 +219,7 @@ async def get_stocks(
     limit: int = Query(100, alias="limit")
 ):
     # df_cached는 이미 'relative_strength' 백분위 순위 + 내림차순 상태
-    # 혹시 모르니 한번 더 정렬
+    # 혹시 모르니 한 번 더 정렬
     sorted_data = sorted(
         df_cached,
         key=lambda x: float(x["relative_strength"]),
