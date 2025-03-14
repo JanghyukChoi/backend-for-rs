@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 from fastapi import FastAPI, Query
-from typing import Optional  # <-- 검색 파라미터를 Optional로 사용하기 위해
 from pykrx import stock
 import datetime
 import requests
@@ -211,44 +210,31 @@ def load_or_create_stock_data():
 
     return stock_data
 
-# ✅ 전역 캐시 데이터
+# ✅ FastAPI 실행 시, 기존 데이터 Firestore에서 로드 또는 새로 계산
 df_cached = load_or_create_stock_data()
 
-# ✅ 실제 API 엔드포인트 (서버 페이징 + 검색)
 @app.get("/api/stocks")
 async def get_stocks(
-    search: Optional[str] = Query(None, alias="search"),
     page: int = Query(1, alias="page"),
     limit: int = Query(100, alias="limit")
 ):
-    """
-    (1) df_cached에서 데이터 불러옴
-    (2) search 파라미터가 있으면, '이름' 필드에 부분 문자열 매칭
-    (3) relative_strength 내림차순 정렬
-    (4) page & limit로 페이징
-    (5) JSON으로 반환
-    """
-    data = df_cached  # 이미 계산된 전체 리스트(메모리)
+    # df_cached는 이미 'relative_strength' 백분위 순위 + 내림차순 상태
+    # 혹시 모르니 한 번 더 정렬
+    sorted_data = sorted(
+        df_cached,
+        key=lambda x: float(x["relative_strength"]),
+        reverse=True
+    )
 
-    # (A) 검색어가 있을 경우, 부분 문자열 매칭
-    if search and search.strip():
-        s_lower = search.strip().lower()
-        data = [doc for doc in data if s_lower in doc["이름"].lower()]
-
-    # (B) 정렬
-    data_sorted = sorted(data, key=lambda x: float(x["relative_strength"]), reverse=True)
-
-    # (C) 페이지 계산
-    total_items = len(data_sorted)
     start_idx = (page - 1) * limit
     end_idx = start_idx + limit
-    paginated_data = data_sorted[start_idx:end_idx]
+    total_items = len(sorted_data)
 
-    # (D) 총 페이지
-    total_pages = (total_items // limit) + (1 if total_items % limit > 0 else 0)
+    paginated_data = sorted_data[start_idx:end_idx]
 
     return {
         "stocks": paginated_data,
-        "total_pages": total_pages,
+        "total_pages": (total_items // limit) + (1 if total_items % limit > 0 else 0),
         "current_page": page
     }
+
