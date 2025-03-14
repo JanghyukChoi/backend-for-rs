@@ -2,63 +2,80 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <!-- 모바일 대응을 위한 뷰포트 설정 -->
+  <!-- 모바일 대응 뷰포트 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>상대강도(RS) 분석 사이트 </title>
+  <title>상대강도(RS) 종목 분석 사이트</title>
   <style>
-    /*********************************************
-     * [1] 전체 페이지 & 반응형 기본 설정
-     *********************************************/
+    /**********************************************
+     * [1] 전체 레이아웃 & 반응형 기본 설정
+     **********************************************/
     body {
       font-family: Arial, sans-serif;
       margin: 0 auto;
       padding: 20px;
-      max-width: 1100px; /* 데스크톱에서는 최대 1100px, 모바일에서는 화면 폭에 맞게 */
-      box-sizing: border-box; /* 패딩 포함 박스 사이징 */
-      position: relative; /* 사이드바 위치 조정을 위해 */
+      max-width: 1100px;
+      box-sizing: border-box;
+      position: relative;
     }
-    h1 {
-      text-align: center;
-      font-size: 28px;
-      font-weight: bold;
-      margin-bottom: 10px;
-      margin-top: 0; 
+    * {
+      box-sizing: inherit;
     }
 
-    /*********************************************
-     * [2] 햄버거 메뉴 & 사이드바
-     *********************************************/
-    /* 메뉴 아이콘(왼쪽 상단) */
+    /**********************************************
+     * [2] 헤더 (햄버거 메뉴 + 제목)
+     **********************************************/
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      position: relative;
+    }
     .menu-icon {
       font-size: 24px;
       cursor: pointer;
-      position: absolute;
-      left: 20px;
-      top: 20px;
-      z-index: 9999;
+    }
+    h1 {
+      flex: 1; /* 제목이 남은 공간 차지 */
+      font-size: 28px;
+      font-weight: bold;
+      margin: 0;
+      text-align: left; /* 혹은 center 등 원하는 정렬 */
     }
 
-    /* 사이드바 기본 스타일 */
+    /**********************************************
+     * [3] 사이드바 (메뉴) 
+     **********************************************/
+    /* 데스크톱 디폴트: 400px */
     #sidebar {
-      position: fixed; 
-      top: 0; 
-      left: -300px;     /* 처음엔 화면 바깥에 위치 */
-      width: 300px;
+      position: fixed;
+      top: 0;
+      left: -400px; /* 처음엔 숨김 */
+      width: 400px;
       height: 100%;
       background-color: #f8f8f8;
       box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
-      transition: left 0.3s ease; /* 좌우 슬라이드 애니메이션 */
-      z-index: 9998;     /* 본문 위에 표시되도록 */
+      transition: left 0.3s ease;
+      z-index: 9998;
       display: flex;
       flex-direction: column;
     }
-
-    /* 사이드바 펼쳐진 상태 */
+    /* 열렸을 때 */
     #sidebar.open {
-      left: 0; /* 화면 안으로 들어옴 */
+      left: 0;
+    }
+    /* 모바일(폭 <= 768px)에서는 폭 줄이기 */
+    @media (max-width: 768px) {
+      #sidebar {
+        width: 280px;
+        left: -280px;
+      }
+      #sidebar.open {
+        left: 0;
+      }
     }
 
-    /* 사이드바 상단 헤더 */
+    /* 사이드바 헤더 */
     .sidebar-header {
       display: flex;
       justify-content: space-between;
@@ -67,8 +84,6 @@
       font-weight: bold;
       border-bottom: 1px solid #ccc;
     }
-
-    /* 사이드바 닫기 버튼(오른쪽 상단) */
     .close-btn {
       font-size: 20px;
       cursor: pointer;
@@ -88,12 +103,11 @@
     .sidebar-menu li:hover {
       background-color: #ddd;
     }
-
-    /* 사이드바 내 컨텐츠 영역 (클릭 시 보여줄 텍스트) */
+    /* 사이드바 안쪽 컨텐츠 영역 */
     .sidebar-content {
-      flex: 1; /* 사이드바 높이 확장에 따라 자동으로 늘어남 */
+      flex: 1; 
       padding: 1rem;
-      overflow-y: auto; /* 내용이 길면 스크롤 가능 */
+      overflow-y: auto;
       font-size: 14px;
       line-height: 1.5;
     }
@@ -105,21 +119,17 @@
     .sidebar-content p {
       margin-bottom: 1rem;
     }
-    .sidebar-content code {
-      background-color: #eee;
-      padding: 0 4px;
-    }
 
-    /*********************************************
-     * [3] 상단 컨테이너(업데이트 시간 + 검색창)
-     *********************************************/
+    /**********************************************
+     * [4] 상단 컨테이너(업데이트 시간 + 검색창)
+     **********************************************/
     .top-container {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px; 
+      flex-wrap: wrap; /* 화면 좁을때 줄바꿈 */
       gap: 10px;
-      flex-wrap: wrap; /* 화면 좁으면 줄바꿈 */
     }
     .update-time {
       font-size: 14px;
@@ -133,14 +143,12 @@
       gap: 10px;
       margin-bottom: 15px;
     }
-    /* 검색창 & 버튼 */
     input {
       padding: 10px;
       font-size: 16px;
       border: 2px solid #ccc;
       border-radius: 5px;
       width: 200px;
-      box-sizing: border-box;
     }
     button {
       padding: 10px 15px;
@@ -156,18 +164,18 @@
       background-color: #0056b3;
     }
 
-    /*********************************************
-     * [4] 테이블 & 페이지네이션
-     *********************************************/
+    /**********************************************
+     * [5] 테이블 & 페이지네이션
+     **********************************************/
     .table-wrapper {
       width: 100%;
-      overflow-x: auto; /* 화면이 좁을 때 가로 스크롤 */
+      overflow-x: auto; 
       margin-top: 10px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 800px; /* 화면 좁아도 테이블이 너무 작아지지 않도록 */
+      min-width: 800px;
     }
     th, td {
       border: 1px solid #ccc;
@@ -205,25 +213,16 @@
       cursor: default;
     }
 
-    /*********************************************
-     * [5] 반응형 (화면 <= 768px)
-     *********************************************/
+    /**********************************************
+     * [6] 반응형 (<=768px) 
+     **********************************************/
     @media (max-width: 768px) {
-      body {
-        padding: 10px;
-      }
       h1 {
         font-size: 22px;
-        margin-bottom: 15px;
-      }
-      .top-container {
-        flex-direction: column;
-        align-items: flex-start;
       }
       .search-container {
         width: 100%;
         justify-content: space-between;
-        margin-bottom: 10px;
       }
       input {
         width: 100%;
@@ -249,13 +248,13 @@
 </head>
 <body>
 
-  <!-- [A] 햄버거 아이콘 -->
-  <div class="menu-icon" onclick="toggleSidebar()">&#9776;</div>
+  <!-- [A] 헤더: 메뉴 아이콘 + 제목 -->
+  <header class="header">
+    <div class="menu-icon" onclick="toggleSidebar()">&#9776;</div>
+    <h1>>📊 상대강도(RS) 기반 강세 종목 분석</h1>
+  </header>
 
-  <!-- [B] 페이지 메인 제목 -->
-  <h1>📊 상대강도(RS) 기반 강세 종목 분석</h1>
-
-  <!-- [C] 상단(업데이트 시간 + 검색) -->
+  <!-- [B] 상단 컨테이너: 업데이트 시간 + 검색 -->
   <div class="top-container">
     <div id="updateTime" class="update-time"></div>
     <div class="search-container">
@@ -264,7 +263,7 @@
     </div>
   </div>
 
-  <!-- [D] 테이블 영역 -->
+  <!-- [C] 테이블 영역 -->
   <div class="table-wrapper">
     <table id="stockTable">
       <thead>
@@ -283,10 +282,9 @@
       <tbody></tbody>
     </table>
   </div>
-  <!-- 페이지네이션 영역 -->
   <div class="pagination" id="pagination"></div>
 
-  <!-- [E] 왼쪽 사이드바 (메뉴 탭) -->
+  <!-- [D] 사이드바 (왼쪽) -->
   <div id="sidebar">
     <div class="sidebar-header">
       <span>📋 메뉴</span>
@@ -297,14 +295,14 @@
       <li onclick="showDevIntro()">사이트 개발자 소개</li>
     </ul>
     <div class="sidebar-content" id="sidebarContent">
-      <!-- 클릭 시 여기에 내용이 동적으로 표시됨 -->
+      <!-- 클릭 시 동적 내용 삽입 -->
     </div>
   </div>
 
   <script>
-    /*********************************************
-     * 전역 변수 & 초기 설정
-     *********************************************/
+    /************************************************
+     * 전역 변수 & 초기 데이터 로딩
+     ************************************************/
     let allStocks = []; 
     let currentPage = 1;
     let totalPages = 1;
@@ -312,125 +310,59 @@
     let filteredStocks = [];
     const API_URL = "https://backend-for-rs-production.up.railway.app/api/stocks"; 
 
-    // 사이드바 열고 닫기
+    // [A] 햄버거 메뉴 열고 닫기
     function toggleSidebar() {
       const sidebar = document.getElementById("sidebar");
+      const menuIcon = document.querySelector(".menu-icon");
       sidebar.classList.toggle("open");
+      // 사이드바가 열렸으면 햄버거 아이콘 숨기기, 닫으면 다시 보이기
+      if (sidebar.classList.contains("open")) {
+        menuIcon.style.display = "none";
+      } else {
+        menuIcon.style.display = "block";
+      }
     }
 
-    // [1] 사이드바에서 "상대강도(RS)란?" 클릭 시 표시할 텍스트
+    // [B] 사이드바 메뉴 내용
     const rsText = `
 <h3>상대강도(RS)란?</h3>
-<p>
-<strong>상대강도(Relative Strength, RS)</strong>는 특정 주식이 시장 전체 또는 다른 종목 대비 얼마나 강한 상승세를 보이는지를 측정하는 지표입니다. 
-단순 등락률 비교가 아니라, 최근 일정 기간 동안의 성과를 종합적으로 평가하여 가장 강한 주식을 찾아내는 것이 핵심 목표입니다.
-</p>
+<p><strong>상대강도(Relative Strength, RS)</strong>는 특정 주식이 시장 전체 대비 얼마나 강한 상승세를 보이는지를 측정하는 지표입니다.
+단순 등락률 비교가 아니라, 일정 기간 성과를 종합적으로 평가하여 가장 강한 주식을 찾아내는 것이 핵심입니다.</p>
 <h4>📌 주요 개념</h4>
 <ul>
-  <li>윌리엄 오닐(William O'Neil): CAN SLIM에서 <em>상대강도지수(RS Rating)</em>를 활용.</li>
-  <li>마크 미너비니(Mark Minervini): "SEPA(Stock Entry Point Analysis)" 전략에서, <strong>"강한 주식이 더 강해진다"</strong>는 원칙 강조.</li>
+  <li>윌리엄 오닐(William O'Neil): CAN SLIM에서 <em>RS Rating</em> 활용.</li>
+  <li>마크 미너비니(Mark Minervini): SEPA 전략에서 <strong>"강한 주식이 더 강해진다"</strong> 원칙.</li>
 </ul>
-<p>
-✅ 강한 종목을 사야 더 높은 수익을 기대할 수 있다.<br/>
-✅ 단순한 주가 상승률이 아닌, 시장 대비 얼마나 강한 상승세를 보였는지가 중요하다.<br/>
-✅ 기술적 강세를 보이는 주식이 추세를 지속할 확률이 높다.
-</p>
-
+<p>✅ 강한 종목을 사야 더 높은 수익을 기대할 수 있음.<br/>
+✅ 시장 대비 얼마나 강한 상승세를 보였는지가 중요.<br/>
+✅ 기술적 강세를 보이는 주식이 추세를 지속할 확률이 높음.</p>
 <h4>상대강도(RS) 계산 방법</h4>
-<p>
-대표적인 방식은 윌리엄 오닐의 <strong>RS Rating</strong> 계산법과 마크 미너비니의 <strong>상대강도 점수</strong> 산정 방식입니다.
-</p>
-<h5>✅ 1. 윌리엄 오닐의 RS Rating 계산법</h5>
-<p>
-지난 12개월간 주가 상승률을 시장 내 모든 종목과 비교하여 
-<b>백분율 순위(1~99점)</b>로 정규화.<br/>
-예: RS Rating이 90이라면, 시장 내 90% 주식보다 강한 상승률을 기록했다는 의미.
-</p>
-<p>
-<strong>계산 방식:</strong><br/>
-1) 최근 12개월 동안의 주가 상승률 계산<br/>
-2) 이를 모든 종목과 비교, 퍼센타일 순위(Percentile Ranking) 매김<br/>
-3) 상위 99점이 가장 강한 주식, 1점이 가장 약한 주식
-</p>
-<p>
-<strong>해석 방법:</strong><br/>
-✔ RS Rating 80 이상: 강한 종목<br/>
-✔ RS Rating 90 이상: 초강세 종목<br/>
-✔ RS Rating 60 미만: 시장 대비 약한 종목
-</p>
-
-<h5>✅ 2. 마크 미너비니의 상대강도 점수 계산법</h5>
-<p>
-미너비니는 단순히 12개월 수익률만 보는 게 아니라, 
-단기·중기 모멘텀을 종합평가하여 상대강도를 측정합니다.
-</p>
-<p>
-<strong>계산 공식:</strong><br/>
-<code>RS = (2주 수익률 × 2) + 1개월 수익률 + 3개월 수익률 + 6개월 수익률</code><br/>
-✔ 2주 수익률에 2배 가중 → 최근 상승 추세 반영<br/>
-✔ 장기 수익률도 반영 → 지속적 상승 종목 강조<br/>
-✔ 점수를 1~99로 정규화하여 비교
-</p>
-<p>
-<strong>예시 계산:</strong><br/>
-A 종목:<br/>
-2주:+5%, 1개월:+8%, 3개월:+12%, 6개월:+20%<br/>
-<code>RS = (5×2)+8+12+20 = 50</code><br/>
-B 종목:<br/>
-2주:+3%, 1개월:+5%, 3개월:+10%, 6개월:+15%<br/>
-<code>RS = (3×2)+5+10+15 = 36</code><br/>
-→ A 종목이 더 강한 종목으로 평가.
-</p>
+<p>대표적으로 윌리엄 오닐의 <strong>RS Rating</strong> 계산법과 
+마크 미너비니의 <strong>상대강도 점수</strong> 방식이 있음.</p>
+<h5>✅ 1. 윌리엄 오닐의 RS Rating</h5>
+<p>최근 12개월 주가 상승률을 전체 종목과 비교해 
+퍼센타일(1~99)로 환산.<br/>
+RS Rating 90 → 시장 90%의 주식보다 강함.</p>
+<h5>✅ 2. 마크 미너비니의 상대강도 점수</h5>
+<p><code>RS = (2주 수익률×2) + 1개월 + 3개월 + 6개월 수익률</code><br/>
+단기 모멘텀(2주)에 가중, 장기(6개월)도 반영 → 종합적 평가.</p>
 `;
 
-    // [2] 사이드바에서 "사이트 개발자 소개" 클릭 시 표시할 텍스트
     const devIntro = `
 <h3>📚 한양대생의 경제 & 주식 스터디 블로그</h3>
-<p>
-안녕하세요! 저는 한양대학교에서 경제금융학과와 소프트웨어융합을 전공 중인 대학생입니다.
-공부한 내용을 기록하고 공유하기 위해 <strong>네이버 블로그</strong>를 운영하고 있습니다.
-아직 배울 것이 많지만, 매일 조금씩 성장하는 과정 속에서 
-경제와 주식에 대한 다양한 인사이트를 나누고자 합니다.
-</p>
-
-<p><strong>📌 네이버 블로그:</strong> <em>jangsdaytrading</em></p>
-
-<h4>💡 주식 공부 & 트레이딩 스터디</h4>
+<p>안녕하세요! 한양대 경제금융학과 & 소프트웨어융합을 전공 중입니다.
+네이버 블로그(<em>jangsdaytrading</em>)를 운영하며, 매일 조금씩 성장하는 과정을 기록하고 있습니다.</p>
+<h4>💡 주식 공부 & 트레이딩</h4>
 <ul>
-  <li>윌리엄 오닐(William O’Neil) 투자 전략 → 돌파매매(Breakout Trading) 관심</li>
-  <li>상대강도(RS) 지표 적극 활용</li>
-  <li>기술적 분석 + 경제 흐름 + 매매 패턴 연구</li>
+  <li>윌리엄 오닐의 CAN SLIM과 돌파매매 기법 연구</li>
+  <li>상대강도(RS) 지표 활용</li>
+  <li>기술적 분석 + 거시경제 흐름 + 매매 패턴 연구</li>
 </ul>
-
-<h4>📈 한국 주식시장 & 경제 흐름 연구</h4>
-<p>
-한국 주식시장에서 트레이딩하며, 다양한 자료를 분석하여 
-안정적이고 지속가능한 투자 전략을 모색 중입니다.
-</p>
-<ul>
-  <li>실전 매매 사례 정리 & 트레이딩 복기</li>
-  <li>경제 이슈 분석 & 시장 전망</li>
-  <li>기술적 분석 & RS 기반 종목 발굴</li>
-</ul>
-
-<h4>✏ 매일 1개씩 경제 관련 포스팅</h4>
-<p>
-꾸준히 경제 관련 게시물을 작성, 시장 흐름을 분석하며 
-투자에 대한 생각을 정리하고 있습니다.
-</p>
-<ul>
-  <li>글로벌 경제 뉴스 & 시장 동향 분석</li>
-  <li>한국 주식시장 트렌드 및 투자 아이디어 공유</li>
-  <li>실전 매매 복기 & 배운 점 기록</li>
-</ul>
-
-<p>
-<strong>📌 네이버 블로그 방문하기</strong> → <em>jangsdaytrading</em><br/>
-함께 공부하며 성장하는 공간이 되길 바랍니다!
-</p>
+<p>경제 관련 글을 매일 작성하며, 시장 흐름 분석 & 투자 아이디어를 공유하고 있습니다.</p>
+<h4>📌 네이버 블로그: <em>jangsdaytrading</em></h4>
+<p>함께 공부하며 성장할 분들을 환영합니다!</p>
 `;
 
-    // 사이드바 컨텐츠 교체
     function showRSContent() {
       document.getElementById("sidebarContent").innerHTML = rsText;
     }
@@ -438,19 +370,14 @@ B 종목:<br/>
       document.getElementById("sidebarContent").innerHTML = devIntro;
     }
 
-    /*********************************************
-     * [표] 데이터 로드 & 검색 & 페이지네이션
-     *********************************************/
-    // 초기 모든 데이터 로드
+    // [C] 초기 데이터 로드
     async function fetchAllStocks() {
       try {
-        // 실제 서비스에선 서버 페이징을 권장하지만, 여기선 단순히 대량 데이터를 한 번에 가져와 필터/페이지네이션
         const response = await fetch(`${API_URL}?page=1&limit=10000`);
         const data = await response.json();
-
         allStocks = data.stocks;
-        totalPages = Math.ceil(allStocks.length / limit);
         filteredStocks = [...allStocks];
+        totalPages = Math.ceil(allStocks.length / limit);
 
         updateTable(getCurrentPageData());
         updatePagination();
@@ -481,6 +408,7 @@ B 종목:<br/>
         `📅 데이터 기준: ${year}.${month}.${day} 오후 3:30`;
     }
 
+    // [D] 테이블 & 페이지네이션
     function getCurrentPageData() {
       const startIdx = (currentPage - 1) * limit;
       return filteredStocks.slice(startIdx, startIdx + limit);
@@ -491,15 +419,13 @@ B 종목:<br/>
       let html = "";
 
       stocks.forEach(stock => {
-        // 백엔드에서 이미 + / -가 포함된 문자열을 주므로, 그대로 출력
         let increaseRate = `<span style="color: red;">${stock["lowest_increase_rate"]}</span>`;
         let decreaseRate = `<span style="color: blue;">${stock["highest_decrease_rate"]}</span>`;
 
         html += `<tr>
-          <td>
-            <a href="https://finance.naver.com/item/main.naver?code=${stock.종목코드}"
-               target="_blank">${stock.종목코드}</a>
-          </td>
+          <td><a href="https://finance.naver.com/item/main.naver?code=${stock.종목코드}" target="_blank">
+            ${stock.종목코드}
+          </a></td>
           <td>${stock.이름}</td>
           <td>${stock.종가}</td>
           <td>${Number(stock.relative_strength).toFixed(2)}</td>
@@ -510,7 +436,6 @@ B 종목:<br/>
           <td>${stock.시가총액}</td>
         </tr>`;
       });
-
       tbody.innerHTML = html;
     }
 
@@ -518,21 +443,21 @@ B 종목:<br/>
       const paginationDiv = document.getElementById("pagination");
       paginationDiv.innerHTML = "";
 
-      // 이전
+      // 이전 페이지
       paginationDiv.innerHTML += `
-        <button onclick="changePage(${currentPage - 1})"
+        <button onclick="changePage(${currentPage - 1})" 
           ${currentPage === 1 ? "disabled" : ""}>이전</button>`;
 
-      // 페이지 번호들
+      // 페이지 버튼들
       for (let i = 1; i <= totalPages; i++) {
         paginationDiv.innerHTML += `
-          <button onclick="changePage(${i})"
+          <button onclick="changePage(${i})" 
             ${i === currentPage ? "disabled" : ""}>${i}</button>`;
       }
 
-      // 다음
+      // 다음 페이지
       paginationDiv.innerHTML += `
-        <button onclick="changePage(${currentPage + 1})"
+        <button onclick="changePage(${currentPage + 1})" 
           ${currentPage === totalPages ? "disabled" : ""}>다음</button>`;
     }
 
@@ -541,35 +466,28 @@ B 종목:<br/>
         currentPage = page;
         updateTable(getCurrentPageData());
         updatePagination();
-        // 페이지 전환 시 스크롤 최상단 이동
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     }
 
+    // [E] 검색 기능
     function filterTable() {
-      const searchTerm = document
-        .getElementById("searchInput")
-        .value.trim()
-        .toLowerCase();
-
+      const searchTerm = document.getElementById("searchInput").value.trim().toLowerCase();
       filteredStocks = allStocks.filter(stock =>
         stock.이름.toLowerCase().includes(searchTerm)
       );
-
       totalPages = Math.ceil(filteredStocks.length / limit);
       currentPage = 1;
       updateTable(getCurrentPageData());
       updatePagination();
     }
-
-    // 엔터키로 검색
     document.getElementById("searchInput").addEventListener("keypress", function(e) {
       if (e.key === "Enter") {
         filterTable();
       }
     });
 
-    // 페이지 로드시 데이터 불러오기
+    // 시작 시 데이터 불러오기
     fetchAllStocks();
   </script>
 </body>
