@@ -285,7 +285,7 @@
       <li onclick="showDevIntro()">사이트 개발자 소개</li>
     </ul>
     <div class="sidebar-content" id="sidebarContent">
-      <!-- 동적으로 텍스트 표시 예정 -->
+      <!-- 동적으로 텍스트 표시 -->
     </div>
   </div>
 
@@ -295,10 +295,10 @@
      ***********************************************/
     let currentPage = 1;
     let totalPages = 1;
-    const limit = 100; // ← 초기 로딩 시 100개만 가져와 표시
+    const limit = 100;  // 한 페이지에 100개씩
     let currentSearchTerm = ""; // 검색어
 
-    // 백엔드 API 주소 (서버 페이징/검색 지원 가정)
+    // 백엔드 API 주소 (page/limit/search를 지원)
     const BASE_URL = "https://backend-for-rs-production.up.railway.app/api/stocks";
 
     /***********************************************
@@ -308,6 +308,7 @@
       const sidebar = document.getElementById("sidebar");
       const menuIcon = document.querySelector(".menu-icon");
       sidebar.classList.toggle("open");
+      // 열렸으면 햄버거 아이콘 숨기고, 닫으면 다시 표시
       if (sidebar.classList.contains("open")) {
         menuIcon.style.display = "none";
       } else {
@@ -315,7 +316,7 @@
       }
     }
 
-    // [A-1] 사이드바 메뉴 내용
+// [A-1] 사이드바 메뉴 내용
     const rsText = `
 <h3>상대강도(RS)란?</h3>
 <p><strong>상대강도(Relative Strength, RS)</strong>는 특정 주식이 시장 전체 대비 얼마나 강한 상승세를 보이는지를 측정하는 지표입니다.
@@ -364,14 +365,13 @@ RS Rating 90 → 시장 90%의 주식보다 강함.</p>
     }
 
     /***********************************************
-     * [B] 페이지 로드시, 첫 페이지 데이터 불러오기
+     * [B] 페이지 로드시 초기 데이터 요청 + 날짜 표시
      ***********************************************/
     window.onload = () => {
       fetchStocks(1, currentSearchTerm);
       getUpdateTime();
     };
 
-    // 업데이트 시간 표시
     function getUpdateTime() {
       const now = new Date();
       const hours = now.getHours();
@@ -393,29 +393,26 @@ RS Rating 90 → 시장 90%의 주식보다 강함.</p>
     }
 
     /***********************************************
-     * [C] 서버에 (page, limit, search) 요청하는 함수
+     * [C] 서버에 (page, limit, search) 요청
      ***********************************************/
     async function fetchStocks(page, searchTerm) {
       try {
-        // 파라미터 구성
         let url = `${BASE_URL}?page=${page}&limit=${limit}`;
         if (searchTerm) {
           url += `&search=${encodeURIComponent(searchTerm)}`;
         }
-        // 서버에서 JSON 받기
         const res = await fetch(url);
         const data = await res.json();
 
-        // data 구조: { stocks: [...], total_pages: number, current_page: number }
+        // data: { stocks, total_pages, current_page }
         const stocks = data.stocks;
         totalPages = data.total_pages;
         currentPage = data.current_page;
 
-        // 테이블 & 페이지네이션 갱신
         updateTable(stocks);
         updatePagination();
-      } catch (err) {
-        console.error("❌ 데이터 로드 중 오류 발생:", err);
+      } catch (error) {
+        console.error("❌ 데이터 로드 중 오류 발생:", error);
       }
     }
 
@@ -427,12 +424,14 @@ RS Rating 90 → 시장 90%의 주식보다 강함.</p>
       let html = "";
 
       stocks.forEach(stock => {
+        // 백엔드에서 + / -가 포함된 문자열을 주므로, 그대로 출력
         let increaseRate = `<span style="color: red;">${stock["lowest_increase_rate"]}</span>`;
         let decreaseRate = `<span style="color: blue;">${stock["highest_decrease_rate"]}</span>`;
 
         html += `<tr>
-          <td><a href="https://finance.naver.com/item/main.naver?code=${stock.종목코드}"
-                 target="_blank">${stock.종목코드}</a></td>
+          <td><a href="https://finance.naver.com/item/main.naver?code=${stock.종목코드}" target="_blank">
+            ${stock.종목코드}
+          </a></td>
           <td>${stock.이름}</td>
           <td>${stock.종가}</td>
           <td>${Number(stock.relative_strength).toFixed(2)}</td>
@@ -448,28 +447,34 @@ RS Rating 90 → 시장 90%의 주식보다 강함.</p>
     }
 
     /***********************************************
-     * [E] 페이지네이션
+     * [E] 페이지네이션 버튼
      ***********************************************/
     function updatePagination() {
       const paginationDiv = document.getElementById("pagination");
       paginationDiv.innerHTML = "";
 
-      // 이전
+      // 이전 페이지
       paginationDiv.innerHTML += `
-        <button onclick="changePage(${currentPage - 1})" 
-        ${currentPage === 1 ? "disabled" : ""}>이전</button>`;
+        <button onclick="changePage(${currentPage - 1})"
+          ${currentPage === 1 ? "disabled" : ""}>
+          이전
+        </button>`;
 
-      // 페이지 번호들
+      // 페이지 번호 버튼
       for (let i = 1; i <= totalPages; i++) {
         paginationDiv.innerHTML += `
-          <button onclick="changePage(${i})" 
-            ${i === currentPage ? "disabled" : ""}>${i}</button>`;
+          <button onclick="changePage(${i})"
+            ${i === currentPage ? "disabled" : ""}>
+            ${i}
+          </button>`;
       }
 
-      // 다음
+      // 다음 페이지
       paginationDiv.innerHTML += `
-        <button onclick="changePage(${currentPage + 1})" 
-        ${currentPage === totalPages ? "disabled" : ""}>다음</button>`;
+        <button onclick="changePage(${currentPage + 1})"
+          ${currentPage === totalPages ? "disabled" : ""}>
+          다음
+        </button>`;
     }
 
     function changePage(page) {
@@ -480,12 +485,11 @@ RS Rating 90 → 시장 90%의 주식보다 강함.</p>
     }
 
     /***********************************************
-     * [F] 검색 기능 (서버 사이드 검색 가정)
+     * [F] 검색 기능 (서버 사이드 검색)
      ***********************************************/
     function onSearch() {
       const term = document.getElementById("searchInput").value.trim().toLowerCase();
       currentSearchTerm = term;
-      // 검색 시 1페이지로 초기화
       fetchStocks(1, currentSearchTerm);
     }
     document.getElementById("searchInput").addEventListener("keypress", function(e) {
