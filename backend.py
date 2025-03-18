@@ -9,7 +9,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi.middleware.cors import CORSMiddleware
-import pytz  # ✅ pytz 라이브러리 추가
+import pytz  # 한국 시간 설정을 위한 라이브러리
 
 app = FastAPI()
 
@@ -30,9 +30,11 @@ firebase_admin.initialize_app(cred)
 # ✅ Firestore 연결
 db = firestore.client()
 
-# ✅ 현재 날짜 및 1년 전 날짜 계산
-today = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime("%Y%m%d")
-one_year_ago_str = (datetime.datetime.today() - datetime.timedelta(days=365)).strftime("%Y%m%d")
+# ✅ 한국 시간(KST) 설정
+kst = pytz.timezone("Asia/Seoul")
+# ✅ 현재 날짜 및 1년 전 날짜 계산 (KST 기준)
+today = (datetime.datetime.now(kst) - datetime.timedelta(days=1)).strftime("%Y%m%d")
+one_year_ago_str = (datetime.datetime.now(kst) - datetime.timedelta(days=365)).strftime("%Y%m%d")
 
 # ✅ 코스피, 코스닥 종목 리스트 가져오기 (우선주 제거)
 kospi_stocks = stock.get_market_ticker_list(market="KOSPI")
@@ -88,43 +90,38 @@ def calculate_relative_strength(ticker):
         decrease_from_high = ((highest_price - today_data["종가"]) / highest_price) * 100
 
         return total_score, today_data["종가"], increase_from_low, decrease_from_high
-    except:
+    except Exception as e:
+        print(f"Error calculating relative strength for {ticker}: {e}")
         return None
 
 # ✅ Firestore에 데이터 "배치"로 저장 (한 번에 교체)
 def save_to_firestore(data):
     collection_ref = db.collection("stocks")
-    batch = db.batch()  # 배치 객체 생성
+    batch = db.batch()
 
     for stock_doc in data:
         doc_ref = collection_ref.document(stock_doc["종목코드"])
         batch.set(doc_ref, stock_doc)
-    batch.commit()  # 여기서 한꺼번에 커밋
+    batch.commit()
 
     print("Firestore에 데이터 일괄 저장 완료!")
 
-# ✅ 새로운 데이터 생성이 필요한지 확인하는 함수
+# ✅ 하루에 한 번만 업데이트: 이미 오늘 업데이트했으면 다시 업데이트하지 않음.
 def should_update_data():
-    """ 오후 3시 30분 이후에는 데이터 갱신 """
-    now = datetime.datetime.now()
-    is_after_330 = now.hour > 15 or (now.hour == 15 and now.minute >= 30)
-
+    now = datetime.datetime.now(kst)
     doc_ref = db.collection("metadata").document("last_update")
     doc = doc_ref.get()
-
+    today_str = now.strftime("%Y-%m-%d")
     if doc.exists:
         last_update_date = doc.to_dict().get("date", "")
-        today_str = now.strftime("%Y-%m-%d")
-        if last_update_date == today_str and not is_after_330:
+        if last_update_date == today_str:
             return False
-
-    return True  # ✅ 업데이트 필요
+    return True
 
 # ✅ 데이터 로드 또는 생성
 def load_or_create_stock_data():
     if not should_update_data():
         print("Firestore에서 기존 데이터 로드 중...")
-        # Firestore에서 relative_strength가 높은 순으로 문서를 가져옴
         stocks_ref = db.collection("stocks").order_by("relative_strength", direction=firestore.Query.DESCENDING).stream()
         return [doc.to_dict() for doc in stocks_ref]
 
@@ -167,7 +164,6 @@ def load_or_create_stock_data():
                 "종목코드": ticker.zfill(6),
                 "이름": stock.get_market_ticker_name(ticker),
                 "종가": close_price,
-                # ✅ 영어 필드명
                 "relative_strength": round(total_score, 2),
                 "lowest_increase_rate": f"+{increase_from_low:.2f}%",
                 "highest_decrease_rate": f"-{decrease_from_high:.2f}%",
@@ -178,10 +174,8 @@ def load_or_create_stock_data():
 
     # ▼▼▼ 백분위 순위 변환 + 내림차순 정렬 ▼▼▼
     df = pd.DataFrame(stock_data)
-
-    # (선택) 시가총액 500억 필터
     df["시가총액(숫자)"] = df["시가총액"].str.replace("억", "").astype(float)
-    df = df[df["시가총액(숫자)"] >= 500]  # 500억 이상만
+    df = df[df["시가총액(숫자)"] >= 500]  # 500억 이상만 필터링
 
     # 1) 백분위 순위 변환 (1 ~ 99 사이로 스케일링)
     df["relative_strength"] = (
@@ -190,38 +184,32 @@ def load_or_create_stock_data():
 
     # 2) 내림차순 정렬
     df = df.sort_values(by="relative_strength", ascending=False)
-
-    # 다시 list of dict로 변환
     stock_data = df.to_dict(orient="records")
     # ▲▲▲ 백분위 순위 변환 + 내림차순 정렬 ▲▲▲
 
     # Firestore 저장 (배치로 한 번에)
     save_to_firestore(stock_data)
 
-    # ✅ 한국 시간(KST) 설정
-    kst = pytz.timezone("Asia/Seoul")
+    # ✅ 한국 시간(KST) 기준으로 마지막 업데이트 시간 Firestore에 저장
     now_kst = datetime.datetime.now(kst)
-
-    # ✅ Firestore에 KST 시간 저장
     db.collection("metadata").document("last_update").set({
-        "date": now_kst.strftime("%Y-%m-%d"),  # 📅 날짜
-        "time": now_kst.strftime("%H:%M:%S")   # ⏰ 시간
+        "date": now_kst.strftime("%Y-%m-%d"),
+        "time": now_kst.strftime("%H:%M:%S")
     })
 
     return stock_data
 
-# ✅ FastAPI 실행 시, 기존 데이터 Firestore에서 로드 또는 새로 계산
-df_cached = load_or_create_stock_data()
-
+# ✅ API 요청 시 최신 데이터 업데이트 여부 확인 후 반환 (하루에 한 번만 업데이트)
 @app.get("/api/stocks")
 async def get_stocks(
     page: int = Query(1, alias="page"),
     limit: int = Query(100, alias="limit")
 ):
-    # df_cached는 이미 'relative_strength' 백분위 순위 + 내림차순 상태
-    # 혹시 모르니 한 번 더 정렬
+    # 매 요청 시 업데이트 여부를 체크하여 데이터 불러오기
+    stock_data = load_or_create_stock_data()
+
     sorted_data = sorted(
-        df_cached,
+        stock_data,
         key=lambda x: float(x["relative_strength"]),
         reverse=True
     )
