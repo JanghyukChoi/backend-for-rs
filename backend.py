@@ -178,14 +178,20 @@ def compute_and_update_stock_data():
 # ✅ 업데이트 필요 여부: 하루에 한 번만 업데이트 (Firestore 메타데이터 기준)
 def should_update_data():
     now = datetime.datetime.now(kst)
+    is_after_330 = now.hour > 15 or (now.hour == 15 and now.minute >= 30)
     doc_ref = db.collection("metadata").document("last_update")
     doc = doc_ref.get()
     today_str = now.strftime("%Y-%m-%d")
     if doc.exists:
         last_update_date = doc.to_dict().get("date", "")
-        if last_update_date == today_str:
+        # 만약 마지막 업데이트 날짜가 오늘이 아니고, 현재 시간이 오후 3시 30 이후이면 업데이트 필요
+        if last_update_date != today_str and is_after_330:
+            return True
+        else:
             return False
-    return True
+    else:
+        # 메타데이터 문서가 없으면 업데이트 필요
+        return True
 
 # ✅ API 엔드포인트: 기존 데이터가 있으면 바로 반환하고, 업데이트 필요 시 백그라운드로 새 데이터 계산
 @app.get("/api/stocks")
