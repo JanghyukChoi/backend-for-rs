@@ -186,7 +186,7 @@ def should_update_data():
         last_update_date = doc.to_dict().get("date", "")
         # 만약 마지막 업데이트 날짜가 오늘이 아니고, 현재 시간이 오후 3시 30 이후이면 업데이트 필요
         if last_update_date != today_str and is_after_330:
-            return True
+            return False
         else:
             return False
     else:
