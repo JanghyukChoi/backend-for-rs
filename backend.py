@@ -104,7 +104,7 @@ def save_to_firestore(data):
         batch.set(doc_ref, stock_doc)
     batch.commit()
 
-    print("Firestore에 데이터 일괄 저장 완료!")
+    print("Firestore에 데이터 전부 다 저장 완료하였습니다.")
 
 # ✅ 하루에 한 번만 업데이트: 이미 오늘 업데이트했으면 다시 업데이트하지 않음.
 def should_update_data():
@@ -126,7 +126,6 @@ def load_or_create_stock_data():
         return [doc.to_dict() for doc in stocks_ref]
 
     print("⚡ 새 데이터 생성 중..")
-    print("조금만 기다려보세요")
     stock_data = []
 
     with ThreadPoolExecutor(max_workers=10) as executor:
