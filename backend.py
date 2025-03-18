@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, BackgroundTasks
 from pykrx import stock
 import datetime
 import requests
@@ -30,9 +30,8 @@ firebase_admin.initialize_app(cred)
 # ✅ Firestore 연결
 db = firestore.client()
 
-# ✅ 한국 시간(KST) 설정
+# ✅ 한국 시간(KST) 설정 및 날짜 계산 (KST 기준)
 kst = pytz.timezone("Asia/Seoul")
-# ✅ 현재 날짜 및 1년 전 날짜 계산 (KST 기준)
 today = (datetime.datetime.now(kst) - datetime.timedelta(days=1)).strftime("%Y%m%d")
 one_year_ago_str = (datetime.datetime.now(kst) - datetime.timedelta(days=365)).strftime("%Y%m%d")
 
@@ -57,11 +56,10 @@ def fetch_sector_data(sec_cd):
             for item in data['list']:
                 sector_map[item["CMP_CD"]] = item["SEC_NM_KOR"]
 
-# ✅ 병렬 처리 실행 (섹터 데이터 가져오기)
 with ThreadPoolExecutor(max_workers=5) as executor:
     executor.map(fetch_sector_data, sector_codes)
 
-# ✅ 특정 날짜 기준으로 상대강도 계산 및 가격 변동률 추가
+# ✅ 특정 날짜 기준으로 상대강도 및 가격 변동률 계산
 def calculate_relative_strength(ticker):
     try:
         df = stock.get_market_ohlcv_by_date(one_year_ago_str, today, ticker)
@@ -81,11 +79,11 @@ def calculate_relative_strength(ticker):
 
         total_score = (score_1 * 2) + score_2 + score_3 + score_4
 
-        # ✅ 최저가 대비 상승률 (%) 계산
+        # 최저가 대비 상승률 (%) 계산
         lowest_price = df["종가"].min()
         increase_from_low = ((today_data["종가"] - lowest_price) / lowest_price) * 100
 
-        # ✅ 최고가 대비 하락률 (%) 계산
+        # 최고가 대비 하락률 (%) 계산
         highest_price = df["종가"].max()
         decrease_from_high = ((highest_price - today_data["종가"]) / highest_price) * 100
 
@@ -94,37 +92,23 @@ def calculate_relative_strength(ticker):
         print(f"Error calculating relative strength for {ticker}: {e}")
         return None
 
-# ✅ Firestore에 데이터 "배치"로 저장 (한 번에 교체)
+# ✅ Firestore에 데이터 배치 저장
 def save_to_firestore(data):
     collection_ref = db.collection("stocks")
     batch = db.batch()
-
     for stock_doc in data:
         doc_ref = collection_ref.document(stock_doc["종목코드"])
         batch.set(doc_ref, stock_doc)
     batch.commit()
-
     print("Firestore에 데이터 전부 다 저장 완료하였습니다.")
 
-# ✅ 하루에 한 번만 업데이트: 이미 오늘 업데이트했으면 다시 업데이트하지 않음.
-def should_update_data():
-    now = datetime.datetime.now(kst)
-    doc_ref = db.collection("metadata").document("last_update")
-    doc = doc_ref.get()
-    today_str = now.strftime("%Y-%m-%d")
-    if doc.exists:
-        last_update_date = doc.to_dict().get("date", "")
-        if last_update_date == today_str:
-            return False
-    return True
+# ✅ Firestore에서 데이터를 빠르게 불러오기
+def load_stock_data():
+    stocks_ref = db.collection("stocks").order_by("relative_strength", direction=firestore.Query.DESCENDING).stream()
+    return [doc.to_dict() for doc in stocks_ref]
 
-# ✅ 데이터 로드 또는 생성
-def load_or_create_stock_data():
-    if not should_update_data():
-        print("Firestore에서 기존 데이터 로드 중...")
-        stocks_ref = db.collection("stocks").order_by("relative_strength", direction=firestore.Query.DESCENDING).stream()
-        return [doc.to_dict() for doc in stocks_ref]
-
+# ✅ 무거운 데이터 계산 및 Firestore 업데이트 (새 데이터 생성)
+def compute_and_update_stock_data():
     print("⚡ 새 데이터 생성 중..")
     stock_data = []
 
@@ -133,21 +117,19 @@ def load_or_create_stock_data():
 
     market_cap_data = stock.get_market_cap(today)
 
-    # ✅ 섹터별 평균 상대강도 계산
+    # 섹터별 평균 상대강도 계산
     sector_scores = {}
     for i, result in enumerate(results):
         if result:
             total_score, _, _, _ = result
             ticker = all_stocks[i]
             sector = sector_map.get(ticker, "알 수 없음")
-            if sector not in sector_scores:
-                sector_scores[sector] = []
-            sector_scores[sector].append(total_score)
+            sector_scores.setdefault(sector, []).append(total_score)
 
-    # 섹터별 평균 상대강도의 내림차순 기준으로 순위 매기기
+    # 섹터별 순위 매기기 (평균 상대강도 기준 내림차순)
     sector_rank = {
         sector: idx + 1
-        for idx, (sector, _) in enumerate(
+        for idx, (sector, scores) in enumerate(
             sorted(sector_scores.items(), key=lambda x: sum(x[1]) / len(x[1]), reverse=True)
         )
     }
@@ -171,25 +153,20 @@ def load_or_create_stock_data():
                 "섹터 수익률 순위": f"섹터 수익률 {sector_rank.get(sector, 'N/A')}위"
             })
 
-    # ▼▼▼ 백분위 순위 변환 + 내림차순 정렬 ▼▼▼
+    # 백분위 순위 변환 및 내림차순 정렬
     df = pd.DataFrame(stock_data)
     df["시가총액(숫자)"] = df["시가총액"].str.replace("억", "").astype(float)
-    df = df[df["시가총액(숫자)"] >= 500]  # 500억 이상만 필터링
+    df = df[df["시가총액(숫자)"] >= 500]  # 500억 이상 필터링
 
-    # 1) 백분위 순위 변환 (1 ~ 99 사이로 스케일링)
     df["relative_strength"] = (
         df["relative_strength"].rank(method="min", pct=True) * 98 + 1
     ).round(2)
-
-    # 2) 내림차순 정렬
     df = df.sort_values(by="relative_strength", ascending=False)
     stock_data = df.to_dict(orient="records")
-    # ▲▲▲ 백분위 순위 변환 + 내림차순 정렬 ▲▲▲
 
-    # Firestore 저장 (배치로 한 번에)
+    # Firestore에 저장
     save_to_firestore(stock_data)
 
-    # ✅ 한국 시간(KST) 기준으로 마지막 업데이트 시간 Firestore에 저장
     now_kst = datetime.datetime.now(kst)
     db.collection("metadata").document("last_update").set({
         "date": now_kst.strftime("%Y-%m-%d"),
@@ -198,15 +175,38 @@ def load_or_create_stock_data():
 
     return stock_data
 
-# ✅ API 요청 시 최신 데이터 업데이트 여부 확인 후 반환 (하루에 한 번만 업데이트)
+# ✅ 업데이트 필요 여부: 하루에 한 번만 업데이트 (Firestore 메타데이터 기준)
+def should_update_data():
+    now = datetime.datetime.now(kst)
+    doc_ref = db.collection("metadata").document("last_update")
+    doc = doc_ref.get()
+    today_str = now.strftime("%Y-%m-%d")
+    if doc.exists:
+        last_update_date = doc.to_dict().get("date", "")
+        if last_update_date == today_str:
+            return False
+    return True
+
+# ✅ API 엔드포인트: 기존 데이터가 있으면 바로 반환하고, 업데이트 필요 시 백그라운드로 새 데이터 계산
 @app.get("/api/stocks")
 async def get_stocks(
     page: int = Query(1, alias="page"),
-    limit: int = Query(100, alias="limit")
+    limit: int = Query(100, alias="limit"),
+    background_tasks: BackgroundTasks = None
 ):
-    # 매 요청 시 업데이트 여부를 체크하여 데이터 불러오기
-    stock_data = load_or_create_stock_data()
+    if should_update_data():
+        # 백그라운드 작업에 새 데이터 계산 추가
+        if background_tasks:
+            background_tasks.add_task(compute_and_update_stock_data)
+        # 기존(stale) 데이터가 있다면 빠르게 로드
+        stock_data = load_stock_data()
+        # 만약 데이터가 전혀 없다면 동기적으로 계산
+        if not stock_data:
+            stock_data = compute_and_update_stock_data()
+    else:
+        stock_data = load_stock_data()
 
+    # 백분위 순위 기준 내림차순 정렬 (이미 Firestore에 저장된 순서와 동일할 수 있음)
     sorted_data = sorted(
         stock_data,
         key=lambda x: float(x["relative_strength"]),
@@ -216,7 +216,6 @@ async def get_stocks(
     start_idx = (page - 1) * limit
     end_idx = start_idx + limit
     total_items = len(sorted_data)
-
     paginated_data = sorted_data[start_idx:end_idx]
 
     return {
@@ -224,4 +223,3 @@ async def get_stocks(
         "total_pages": (total_items // limit) + (1 if total_items % limit > 0 else 0),
         "current_page": page
     }
-
