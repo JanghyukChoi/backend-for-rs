@@ -213,6 +213,12 @@ def load_or_create_stock_data():
 # ✅ FastAPI 실행 시, 기존 데이터 Firestore에서 로드 또는 새로 계산
 df_cached = load_or_create_stock_data()
 
+@app.get("/api/refresh")
+async def refresh_data():
+    global df_cached
+    df_cached = load_or_create_stock_data()
+    return {"status": "✅ 데이터 갱신 완료!"}
+
 @app.get("/api/stocks")
 async def get_stocks(
     page: int = Query(1, alias="page"),
