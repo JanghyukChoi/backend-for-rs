@@ -88,6 +88,8 @@ backend.py → FastAPI 로직 (RS 계산, DB 연동, API 제공) index.html → 
 ---
 
 
+![시스템 구조도](docs/architecture.png)
+
 
 
 
